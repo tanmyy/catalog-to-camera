@@ -145,6 +145,12 @@ def main():
 
     # Which weights are available?
     available = {name: p for name, p in MODEL_PATHS.items() if p.exists()}
+    keras_files = sorted(Path("models").glob("*.keras")) if Path("models").exists() else []
+    if keras_files:
+        st.info("Found a .keras file in models/, but this app uses "
+                "PyTorch, so it cannot load .keras files. Only the .pt "
+                "models below can be selected. To use a .keras model, "
+                "it would need a separate TensorFlow version of the app.")
     if available:
         st.success("Live model loaded. Predictions below are real.")
         model_name = st.selectbox("Model", list(available.keys()), index=0)

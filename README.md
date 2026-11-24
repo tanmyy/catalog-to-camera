@@ -76,7 +76,21 @@ streamlit run app.py
 3. Pick this repo, branch `main`, main file `app.py`, Deploy.
 4. Share the link it gives you. No other setup is needed.
 
-## How to enable live predictions
+## How to select a different model
+
+On the Streamlit app, at the top under "Live model loaded", there
+is a Model dropdown. Pick a model there, then upload a photo.
+Models appear in that dropdown automatically, no code change,
+if you put their `.pt` files in `models/` with these names:
+
+- `models/fashion_classifier_torch.pt` - the final model
+- `models/model_A.pt` - Model A, standard
+- `models/model_B.pt` - Model B, background swap
+- `models/model_C.pt` - Model C, + 598 real photos
+
+Only `.pt` (PyTorch) files work in this app. A `.keras` file
+(TensorFlow/Keras) will not appear in the dropdown, because it
+is a different format and needs TensorFlow to load.
 
 This repo ships in Demo mode: no trained weights are in it, because
 weights are not committed by default and the notebook has to be run
