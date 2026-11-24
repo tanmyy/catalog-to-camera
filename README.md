@@ -81,16 +81,23 @@ streamlit run app.py
 On the Streamlit app, at the top under "Live model loaded", there
 is a Model dropdown. Pick a model there, then upload a photo.
 Models appear in that dropdown automatically, no code change,
-if you put their `.pt` files in `models/` with these names:
+if you put their files in `models/` with these names:
 
-- `models/fashion_classifier_torch.pt` - the final model
-- `models/model_A.pt` - Model A, standard
-- `models/model_B.pt` - Model B, background swap
-- `models/model_C.pt` - Model C, + 598 real photos
+- `models/fashion_classifier_torch.pt` - the final PyTorch model
+- `models/fashion_classifier_tf.keras` - the final TensorFlow model,
+  from `advmaths_project_v3__1.ipynb`. Same EfficientNet-B0,
+  same 10 classes, same 128x128 input. Its deploy model (cell 15)
+  has no augmentation layers and ends in a Dense softmax.
+- `models/model_A.pt` - Model A, standard (PyTorch)
+- `models/model_B.pt` - Model B, background swap (PyTorch)
+- `models/model_C.pt` - Model C, + 598 real photos (PyTorch)
 
-Only `.pt` (PyTorch) files work in this app. A `.keras` file
-(TensorFlow/Keras) will not appear in the dropdown, because it
-is a different format and needs TensorFlow to load.
+PyTorch models use ImageNet normalisation. The TensorFlow model
+uses raw pixels 0-255, as in its notebook. The app handles that
+difference for you.
+
+Note: TensorFlow is a large install, so the first deploy on
+Streamlit Cloud after adding it can take several minutes.
 
 This repo ships in Demo mode: no trained weights are in it, because
 weights are not committed by default and the notebook has to be run

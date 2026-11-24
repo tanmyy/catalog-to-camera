@@ -4,19 +4,21 @@ AASD4015 final project: fashion product image classification.
 One main action: upload a product photo, get its category and confidence.
 
 How it works:
-- If models/model_C.pt is present, the app loads EfficientNet-B0
-  (10 classes) and predicts for real. That is the live mode.
+- If models/fashion_classifier_torch.pt is present, the app loads
+  the PyTorch EfficientNet-B0 (10 classes) and predicts for real.
+- If models/fashion_classifier_tf.keras is present, the app loads
+  the TensorFlow version from advmaths_project_v3__1.ipynb, also
+  EfficientNet-B0, same 10 classes, same 128x128 input, and predicts
+  for real. Pick either one in the Model dropdown at the top.
 - If no weights file is present, the app runs in Demo mode. It shows
   the upload and the preprocessing, and it shows the three example
   predictions from the project deck, with their known results.
   It never invents a prediction for an uploaded photo in Demo mode.
 
-To enable live predictions: run final_project_torch.ipynb (about
-15-20 minutes on a Mac with MPS, longer on Windows without a GPU),
-take the saved weights file, fashion_classifier_torch.pt, put it at
-models/fashion_classifier_torch.pt in this repo (or rename it to
-models/model_C.pt), and redeploy on Streamlit Cloud.
-The weights file is about 16 MB.
+To enable live predictions, run one of the two project notebooks
+and put its saved file in models/, then redeploy on Streamlit Cloud.
+PyTorch: fashion_classifier_torch.pt, about 16 MB.
+TensorFlow: fashion_classifier_tf.keras, about 17 MB.
 """
 import io
 from pathlib import Path
@@ -30,11 +32,20 @@ CLASSES = [
 ]
 
 MODEL_PATHS = {
-    "Final model (from notebook)": Path("models/fashion_classifier_torch.pt"),
-    "Final model (repo root)": Path("fashion_classifier_torch.pt"),
-    "C - + 598 real photos (final)": Path("models/model_C.pt"),
-    "A - standard": Path("models/model_A.pt"),
-    "B - + background replacement": Path("models/model_B.pt"),
+    "Final model (PyTorch)": Path("models/fashion_classifier_torch.pt"),
+    "Final model (PyTorch, repo root)": Path("fashion_classifier_torch.pt"),
+    "C - + 598 real photos (PyTorch)": Path("models/model_C.pt"),
+    "A - standard (PyTorch)": Path("models/model_A.pt"),
+    "B - + background replacement (PyTorch)": Path("models/model_B.pt"),
+}
+
+# TensorFlow/Keras models, from advmaths_project_v3__1.ipynb.
+# That notebook saves an inference-only deploy model (cell 15):
+# EfficientNetB0, no augmentation layers, input 128x128x3,
+# output Dense softmax over the same 10 classes, in the same order.
+KERAS_PATHS = {
+    "Final model (TensorFlow)": Path("models/fashion_classifier_tf.keras"),
+    "Final model (TensorFlow, repo root)": Path("fashion_classifier_tf.keras"),
 }
 
 # Deck examples, section 10-11. Known results, not live predictions.
@@ -123,6 +134,29 @@ def predict(model, image):
     return [(CLASSES[i], float(v)) for v, i in zip(top.values, top.indices)]
 
 
+@st.cache_resource
+def load_keras_model(path):
+    """Load a saved TensorFlow/Keras model. Import tensorflow only
+    here, so the PyTorch path still works if tensorflow is missing."""
+    import tensorflow as tf
+
+    return tf.keras.models.load_model(path, compile=False)
+
+
+def predict_keras(model, image):
+    """Same input as the Keras notebook's deploy model (cell 15):
+    resize 128x128, raw pixels 0-255, no ImageNet normalisation.
+    The deploy model ends in a Dense softmax, so its output is
+    already probabilities over the same 10 classes."""
+    import numpy as np
+
+    arr = np.asarray(image.convert("RGB").resize((128, 128)),
+                     dtype=np.float32)
+    probs = model.predict(arr[np.newaxis, :, :, :], verbose=0)[0]
+    order = np.argsort(probs)[::-1][:3]
+    return [(CLASSES[i], float(probs[i])) for i in order]
+
+
 def show_result(label, confidence, top3):
     st.subheader(f"{label} - {confidence:.0%} confidence")
     st.progress(min(confidence, 1.0))
@@ -143,25 +177,38 @@ def main():
     st.write("Upload a fashion product photo. The model reads its category, "
              "so a seller does not have to pick it by hand.")
 
-    # Which weights are available?
-    available = {name: p for name, p in MODEL_PATHS.items() if p.exists()}
-    keras_files = sorted(Path("models").glob("*.keras")) if Path("models").exists() else []
-    if keras_files:
-        st.info("Found a .keras file in models/, but this app uses "
-                "PyTorch, so it cannot load .keras files. Only the .pt "
-                "models below can be selected. To use a .keras model, "
-                "it would need a separate TensorFlow version of the app.")
-    if available:
+    # Which models are available? One dropdown, both frameworks.
+    # Each option is (label, kind, path). kind is "torch" or "keras".
+    options = []
+    for name, p in MODEL_PATHS.items():
+        if p.exists():
+            options.append((name, "torch", p))
+    for name, p in KERAS_PATHS.items():
+        if p.exists():
+            options.append((name, "keras", p))
+    if options:
         st.success("Live model loaded. Predictions below are real.")
-        model_name = st.selectbox("Model", list(available.keys()), index=0)
-        model = load_model(str(available[model_name]))
-        live = True
+        labels = [name for name, _, _ in options]
+        model_name = st.selectbox("Model", labels, index=0)
+        _, kind, path = next(o for o in options if o[0] == model_name)
+        try:
+            if kind == "keras":
+                model = load_keras_model(str(path))
+            else:
+                model = load_model(str(path))
+            live = True
+        except Exception as e:
+            st.error(f"Could not load {model_name}: {e}")
+            model = None
+            kind = None
+            live = False
     else:
         st.info("Demo mode: no trained weights in this repo yet. "
                 "Uploads below show the preprocessing, and the examples "
                 "show the project's known results. See 'How to enable live "
                 "predictions' at the bottom for the one file to add.")
         model = None
+        kind = None
         live = False
 
     st.header("Try it")
@@ -180,7 +227,10 @@ def main():
                      width=128)
             if live:
                 with st.spinner("Predicting..."):
-                    top3 = predict(model, image)
+                    if kind == "keras":
+                        top3 = predict_keras(model, image)
+                    else:
+                        top3 = predict(model, image)
                 label, conf = top3[0]
                 show_result(label, conf, top3)
             else:
@@ -223,6 +273,13 @@ def main():
 
     with st.expander("How it works"):
         st.write("- Model: EfficientNet-B0, pretrained on ImageNet, 4.02M parameters.")
+        st.write("- Two versions of the same model exist: PyTorch "
+                 "(`final_project_torch.ipynb`) and TensorFlow "
+                 "(`advmaths_project_v3__1.ipynb`). Same 10 classes, "
+                 "same 128x128 input. Pick either one in the Model dropdown.")
+        st.write("- Preprocessing: resize 128x128. PyTorch uses ImageNet "
+                 "normalisation. TensorFlow uses raw pixels 0-255, as in "
+                 "its notebook's deploy model.")
         st.write("- Data: 8,000 catalog images, 10 classes, 800 per class, "
                  "split 70/15/15. Plus 640 real phone photos for testing.")
         st.write("- Preprocessing: resize 128x128, ImageNet normalisation, "
@@ -246,17 +303,18 @@ def main():
                  "with Innerwear.")
 
     with st.expander("How to enable live predictions"):
-        st.write("1. Run `final_project_torch.ipynb` (about 15-20 "
-                 "minutes on a Mac, longer on Windows without a GPU).")
-        st.write("2. Find the saved weights file, "
-                 "`fashion_classifier_torch.pt`, about 16 MB, in the "
-                 "project folder next to the notebook.")
-        st.write("3. Put the file at `models/fashion_classifier_torch.pt` "
-                 "in this repo (or rename it to `models/model_C.pt`).")
-        st.write("4. Redeploy on Streamlit Cloud. The app will then load it "
-                 "and predict for real, with no code change.")
-        st.write("Model A and B weights go at `models/model_A.pt` and "
-                 "`models/model_B.pt` if you want the selector to offer them.")
+        st.write("PyTorch: run `final_project_torch.ipynb`, then put "
+                 "`fashion_classifier_torch.pt` (about 16 MB) at "
+                 "`models/fashion_classifier_torch.pt`.")
+        st.write("TensorFlow: run `advmaths_project_v3__1.ipynb`, then put "
+                 "`fashion_classifier_tf.keras` (about 17 MB) at "
+                 "`models/fashion_classifier_tf.keras`.")
+        st.write("Then redeploy on Streamlit Cloud. The app will then load "
+                 "the model you pick in the dropdown and predict for real, "
+                 "with no code change.")
+        st.write("Model A and B PyTorch weights go at `models/model_A.pt` "
+                 "and `models/model_B.pt` if you want the selector to "
+                 "offer them too.")
 
     st.caption("AASD4015 - Advanced Mathematical Concepts for Deep Learning. "
                "Project: From Catalog to Camera.")
