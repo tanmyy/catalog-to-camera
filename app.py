@@ -11,9 +11,11 @@ How it works:
   predictions from the project deck, with their known results.
   It never invents a prediction for an uploaded photo in Demo mode.
 
-To enable live predictions: run final_project_torch.ipynb on a Mac
-(MPS, about 15-20 minutes), take the saved Model C weights, put the
-file at models/model_C.pt in this repo, and redeploy on Streamlit Cloud.
+To enable live predictions: run final_project_torch.ipynb (about
+15-20 minutes on a Mac with MPS, longer on Windows without a GPU),
+take the saved weights file, fashion_classifier_torch.pt, put it at
+models/fashion_classifier_torch.pt in this repo (or rename it to
+models/model_C.pt), and redeploy on Streamlit Cloud.
 The weights file is about 16 MB.
 """
 import io
@@ -28,6 +30,7 @@ CLASSES = [
 ]
 
 MODEL_PATHS = {
+    "Final model (from notebook)": Path("models/fashion_classifier_torch.pt"),
     "C - + 598 real photos (final)": Path("models/model_C.pt"),
     "A - standard": Path("models/model_A.pt"),
     "B - + background replacement": Path("models/model_B.pt"),
@@ -74,7 +77,12 @@ def load_model(path):
     import torch.nn as nn
 
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
-    state = checkpoint["state_dict"] if isinstance(checkpoint, dict) else checkpoint
+    # The notebook saves a raw state_dict, not a dict with a
+    # "state_dict" key, so use it as it is unless that key exists.
+    if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+        state = checkpoint["state_dict"]
+    else:
+        state = checkpoint
     model = models.efficientnet_b0(weights=None)
     model.classifier[1] = nn.Linear(model.classifier[1].in_features, len(CLASSES))
     model.load_state_dict(state)
@@ -159,7 +167,8 @@ def main():
                 label, conf = top3[0]
                 show_result(label, conf, top3)
             else:
-                st.write("No live prediction yet. Add `models/model_C.pt` "
+                st.write("No live prediction yet. Add "
+                         "`models/fashion_classifier_torch.pt` "
                          "(about 16 MB, from running the project notebook) "
                          "and redeploy, and this same upload will get a real "
                          "category and confidence.")
@@ -220,10 +229,13 @@ def main():
                  "with Innerwear.")
 
     with st.expander("How to enable live predictions"):
-        st.write("1. Run `final_project_torch.ipynb` on a Mac (about 15-20 "
-                 "minutes on MPS).")
-        st.write("2. Find the saved Model C weights, about 16 MB.")
-        st.write("3. Put the file at `models/model_C.pt` in this repo.")
+        st.write("1. Run `final_project_torch.ipynb` (about 15-20 "
+                 "minutes on a Mac, longer on Windows without a GPU).")
+        st.write("2. Find the saved weights file, "
+                 "`fashion_classifier_torch.pt`, about 16 MB, in the "
+                 "project folder next to the notebook.")
+        st.write("3. Put the file at `models/fashion_classifier_torch.pt` "
+                 "in this repo (or rename it to `models/model_C.pt`).")
         st.write("4. Redeploy on Streamlit Cloud. The app will then load it "
                  "and predict for real, with no code change.")
         st.write("Model A and B weights go at `models/model_A.pt` and "

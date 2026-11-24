@@ -82,9 +82,14 @@ This repo ships in Demo mode: no trained weights are in it, because
 weights are not committed by default and the notebook has to be run
 to make them.
 
-1. Run `final_project_torch.ipynb` on a Mac (about 15-20 minutes on MPS).
-2. Find the saved Model C weights, about 16 MB.
-3. Put the file at `models/model_C.pt` in this repo. You can upload
+1. Run `final_project_torch.ipynb`. On a Mac it takes about 15-20
+   minutes on MPS. On Windows it uses an NVIDIA GPU if you have
+   one, otherwise the CPU, which is much slower. Easiest on
+   Windows: use Google Colab with a free GPU instead, see below.
+2. Find the saved weights file, `fashion_classifier_torch.pt`,
+   about 16 MB, in the project folder next to the notebook.
+3. Put the file at `models/fashion_classifier_torch.pt` in this
+   repo (or rename it to `models/model_C.pt`). You can upload
    it on github.com (Add file, Upload files), or with git.
 4. Redeploy on Streamlit Cloud. The app loads it automatically and
    predicts for real, with no code change.
