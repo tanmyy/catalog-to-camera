@@ -31,6 +31,7 @@ CLASSES = [
 
 MODEL_PATHS = {
     "Final model (from notebook)": Path("models/fashion_classifier_torch.pt"),
+    "Final model (repo root)": Path("fashion_classifier_torch.pt"),
     "C - + 598 real photos (final)": Path("models/model_C.pt"),
     "A - standard": Path("models/model_A.pt"),
     "B - + background replacement": Path("models/model_B.pt"),
@@ -84,7 +85,17 @@ def load_model(path):
     else:
         state = checkpoint
     model = models.efficientnet_b0(weights=None)
-    model.classifier[1] = nn.Linear(model.classifier[1].in_features, len(CLASSES))
+    # Rebuild the notebook's head exactly (final_project_torch.ipynb,
+    # cells 3-2 / 3-3c): BatchNorm -> Dropout -> Linear. The notebook
+    # saves that head's state_dict, whose keys are classifier.0.* and
+    # classifier.2.*. A plain Dropout -> Linear head would fail to load
+    # with missing/unexpected keys, so do not simplify this.
+    in_features = model.classifier[1].in_features
+    model.classifier = nn.Sequential(
+        nn.BatchNorm1d(in_features),
+        nn.Dropout(0.3),
+        nn.Linear(in_features, len(CLASSES)),
+    )
     model.load_state_dict(state)
     model.eval()
     return model
